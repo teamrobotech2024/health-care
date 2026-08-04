@@ -3,20 +3,80 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { authApi, ApiError } from "../lib/api";
+import { saveSession } from "../lib/auth";
+
+type View = "login" | "signup" | "verify-email";
 
 export default function Home() {
-  const [view, setView] = useState<"login" | "signup">("login");
+  const [view, setView] = useState<View>("login");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [email, setEmail] = useState("");
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Form state
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupRole, setSignupRole] = useState<"patient" | "admin">("patient");
+
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [signupSuccess, setSignupSuccess] = useState(false);
+
+  // ─── Login handler ──────────────────────────────────────────────────────────
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.toLowerCase().startsWith("admin")) {
-      router.push("/admin");
-    } else {
-      router.push("/patient");
+    setError("");
+    setLoading(true);
+
+    try {
+      const data = await authApi.login(loginEmail, loginPassword);
+      saveSession(data.accessToken, data.refreshToken, data.user);
+
+      // Redirect based on role
+      if (data.user.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/patient");
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Login failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Signup handler ─────────────────────────────────────────────────────────
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (signupPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await authApi.signup(signupName, signupEmail, signupPassword, signupRole);
+      setView("verify-email");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Signup failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -37,10 +97,44 @@ export default function Home() {
       <div className="flex flex-1 items-center justify-center px-6 py-12 overflow-y-auto">
         <div className="w-full max-w-sm">
 
-          {view === "login" ? (
+          {/* ── Email Verification Success ── */}
+          {view === "verify-email" && (
             <>
-              <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">Health Connect </h1>
+              <div className="flex flex-col items-center text-center mb-8">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Check Your Email</h1>
+                <p className="text-sm text-gray-500">
+                  We sent a verification link to <span className="font-semibold text-gray-800">{signupEmail}</span>.
+                  Click the link to verify your account before logging in.
+                </p>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-6 text-xs text-amber-700">
+                <strong>Tip:</strong> Check your spam folder if you don&apos;t see the email.
+              </div>
+              <button
+                onClick={() => setView("login")}
+                className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Back to Sign In
+              </button>
+            </>
+          )}
+
+          {/* ── Login Form ── */}
+          {view === "login" && (
+            <>
+              <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">Health Connect</h1>
               <p className="text-sm text-center text-gray-500 mb-8">Book appointments for your next visit.</p>
+
+              {error && (
+                <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
 
               <form className="flex flex-col gap-4" onSubmit={handleLogin}>
                 {/* Email */}
@@ -50,8 +144,9 @@ export default function Home() {
                     id="email"
                     type="email"
                     placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={loginEmail}
+                    onChange={(e) => { setLoginEmail(e.target.value); setError(""); }}
+                    required
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                 </div>
@@ -64,6 +159,9 @@ export default function Home() {
                       id="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => { setLoginPassword(e.target.value); setError(""); }}
+                      required
                       className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition pr-10"
                     />
                     <button
@@ -87,13 +185,11 @@ export default function Home() {
                       type="checkbox"
                       checked={rememberMe}
                       onChange={() => setRememberMe(!rememberMe)}
-                      className="w-4 h-4 rounded border-gray-300 text-[#000000]-600 focus:ring-[#000000]-500"
+                      className="w-4 h-4 rounded border-gray-300"
                     />
                     Remember for 30 days
-                  </label><button
-                    type="button"
-                    className="text-sm font-medium text-[#000000] hover:text-[#222222]"
-                  >
+                  </label>
+                  <button type="button" className="text-sm font-medium text-gray-800 hover:text-gray-600">
                     Forgot password
                   </button>
                 </div>
@@ -101,42 +197,75 @@ export default function Home() {
                 {/* Sign In Button */}
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-[#000000] hover:bg-[#181818]-700 active:bg-blue-800 text-white text-sm font-semibold rounded-lg transition shadow-sm mt-1"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-white text-sm font-semibold rounded-lg transition shadow-sm mt-1 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Sign in
-                </button>
-
-                {/* Google Sign In */}
-                <button
-                  type="button"
-                  className="w-full py-2.5 flex items-center justify-center gap-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                  Sign in with Google
+                  {loading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                      Signing in…
+                    </>
+                  ) : "Sign in"}
                 </button>
               </form>
 
               <p className="text-sm text-center text-gray-500 mt-6">
                 Don&apos;t have an account?{" "}
                 <button
-                  onClick={() => setView("signup")}
-                  className="font-semibold text-[#181818] hover:text-[#000000]"
+                  onClick={() => { setView("signup"); setError(""); }}
+                  className="font-semibold text-gray-900 hover:text-gray-700"
                 >
                   Sign up
                 </button>
               </p>
             </>
-          ) : (
+          )}
+
+          {/* ── Signup Form ── */}
+          {view === "signup" && (
             <>
               <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">Create an account</h1>
-              <p className="text-sm text-center text-gray-500 mb-8">Start your 30-day free trial.</p>
+              <p className="text-sm text-center text-gray-500 mb-6">You&apos;ll receive an email to verify your account.</p>
 
-              <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+              {/* Role selector */}
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setSignupRole("patient")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
+                    signupRole === "patient"
+                      ? "bg-gray-900 text-white border-gray-900 shadow-sm"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Patient
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignupRole("admin")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
+                    signupRole === "admin"
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  Admin
+                </button>
+              </div>
+
+              {error && (
+                <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <form className="flex flex-col gap-4" onSubmit={handleSignup}>
                 {/* Name */}
                 <div className="flex flex-col gap-1">
                   <label htmlFor="name" className="text-sm font-medium text-gray-700">
@@ -146,6 +275,9 @@ export default function Home() {
                     id="name"
                     type="text"
                     placeholder="Enter your name"
+                    value={signupName}
+                    onChange={(e) => { setSignupName(e.target.value); setError(""); }}
+                    required
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                 </div>
@@ -159,6 +291,9 @@ export default function Home() {
                     id="signup-email"
                     type="email"
                     placeholder="Enter your email"
+                    value={signupEmail}
+                    onChange={(e) => { setSignupEmail(e.target.value); setError(""); }}
+                    required
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                   />
                 </div>
@@ -173,6 +308,9 @@ export default function Home() {
                       id="signup-password"
                       type={showPassword ? "text" : "password"}
                       placeholder="Create a password"
+                      value={signupPassword}
+                      onChange={(e) => { setSignupPassword(e.target.value); setError(""); }}
+                      required
                       className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition pr-10"
                     />
                     <button
@@ -193,37 +331,30 @@ export default function Home() {
                 {/* Get Started Button */}
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-[#000000] hover:bg-[#181818] active:bg-[#000000] text-white text-sm font-semibold rounded-lg transition shadow-sm mt-1"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-white text-sm font-semibold rounded-lg transition shadow-sm mt-1 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Get started
-                </button>
-
-                {/* Google Sign Up */}
-                <button
-                  type="button"
-                  className="w-full py-2.5 flex items-center justify-center gap-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                  Sign up with Google
+                  {loading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                      Creating account…
+                    </>
+                  ) : "Get started"}
                 </button>
               </form>
 
               <p className="text-sm text-center text-gray-500 mt-6">
                 Already have an account?{" "}
                 <button
-                  onClick={() => setView("login")}
-                  className="font-semibold text-[#000000] hover:text-[#181818]"
+                  onClick={() => { setView("login"); setError(""); }}
+                  className="font-semibold text-gray-900 hover:text-gray-700"
                 >
                   Log in
                 </button>
               </p>
             </>
           )}
+
         </div>
       </div>
     </div>

@@ -2,8 +2,11 @@
 
 import Image from "next/image";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { appointmentsApi, type Appointment, ApiError } from "../../lib/api";
+import { clearSession, getUser, getAvatarLetter, authApi } from "../../lib/auth";
+import { authApi as authApiCall } from "../../lib/api";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 function HomeIcon({ active }: { active?: boolean }) {
@@ -50,19 +53,6 @@ const sidebarNavItems = [
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AppStatus = "Confirmed" | "Pending" | "Cancelled" | "Rescheduled";
-interface Appointment {
-  id: string;
-  title: string;
-  date: string;
-  time: string;
-  doctor: string;
-  department: string;
-  status: AppStatus;
-  note: string;
-}
-
-// ─── Appointments data (will be replaced by DB fetch) ────────────────────────
-const ALL_APPOINTMENTS: Appointment[] = [];
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<AppStatus, { badge: string; note: string; dot: string }> = {
@@ -267,7 +257,31 @@ export default function UpcomingPage() {
   const [activeTab, setActiveTab]   = useState<"Bookings"|"Rescheduled"|"Cancelled">("Bookings");
   const [cancelId, setCancelId]     = useState<string|null>(null);
   const [rescheduleId, setRescheduleId] = useState<string|null>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>(ALL_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState("Patient");
+  const [avatarLetter, setAvatarLetter] = useState("P");
+
+  // Fetch appointments from backend
+  useEffect(() => {
+    const user = getUser();
+    if (user) {
+      setUserName(user.name || user.email);
+      setAvatarLetter(getAvatarLetter());
+    }
+
+    appointmentsApi
+      .list()
+      .then(({ appointments }) => setAppointments(appointments))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleLogout = async () => {
+    try { await authApiCall.logout(); } catch {}
+    clearSession();
+    router.push("/");
+  };
 
   const tabFilter: Record<string, AppStatus[]> = {
     Bookings:    ["Confirmed","Pending"],
@@ -276,13 +290,30 @@ export default function UpcomingPage() {
   };
   const filtered = appointments.filter(a => tabFilter[activeTab].includes(a.status));
 
-  const doCancel = (id: string, reason: string) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: "Cancelled" as AppStatus, note: `Cancelled: ${reason}. Book a new one if needed.` } : a));
-    setCancelId(null);
+  const doCancel = async (id: string, reason: string) => {
+    try {
+      const { appointment } = await appointmentsApi.cancel(id, reason);
+      setAppointments(prev =>
+        prev.map(a => a.id === id ? { ...a, status: appointment.status as AppStatus, note: appointment.note } : a)
+      );
+    } catch (err) {
+      console.error("Cancel failed:", err);
+    } finally {
+      setCancelId(null);
+    }
   };
-  const doReschedule = (id: string) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: "Rescheduled" as AppStatus, note: "Your appointment has been rescheduled. New date confirmed." } : a));
-    setRescheduleId(null);
+
+  const doReschedule = async (id: string) => {
+    try {
+      const { appointment } = await appointmentsApi.reschedule(id);
+      setAppointments(prev =>
+        prev.map(a => a.id === id ? { ...a, status: appointment.status as AppStatus, note: appointment.note } : a)
+      );
+    } catch (err) {
+      console.error("Reschedule failed:", err);
+    } finally {
+      setRescheduleId(null);
+    }
   };
 
   const tabs: ("Bookings"|"Rescheduled"|"Cancelled")[] = ["Bookings","Rescheduled","Cancelled"];

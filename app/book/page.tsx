@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { appointmentsApi } from "../../lib/api";
+import { getUser, getAvatarLetter } from "../../lib/auth";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 function HomeIcon({ active }: { active?: boolean }) {
@@ -299,7 +301,15 @@ export default function BookAppointment() {
   const [selectedTime, setSelectedTime] = useState<string|null>(null);
   const [errors, setErrors]       = useState<Record<string,string>>({});
   const [step, setStep]           = useState<"form"|"otp"|"confirmed">("form");
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingError, setBookingError] = useState("");
   const strip = useMemo(()=>buildStrip(),[]);
+
+  // Pre-fill name from logged-in user
+  useEffect(() => {
+    const user = getUser();
+    if (user?.name) setName(user.name);
+  }, []);
 
   const handleContinue = () => {
     const e: Record<string,string> = {};
@@ -310,6 +320,28 @@ export default function BookAppointment() {
     if (!selectedTime) e.time = "Please select a time";
     setErrors(e);
     if (!Object.keys(e).length) setStep("otp");
+  };
+
+  // Called after OTP is verified — POSTs appointment to backend
+  const handleOtpVerified = async () => {
+    setBookingLoading(true);
+    setBookingError("");
+    try {
+      const dateStr = selectedDate!.toISOString().split("T")[0];
+      await appointmentsApi.book({
+        patient_name: name,
+        phone,
+        date: dateStr,
+        time: selectedTime!,
+      });
+      setStep("confirmed");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Booking failed. Please try again.";
+      setBookingError(msg);
+      setStep("form"); // go back to form to show error
+    } finally {
+      setBookingLoading(false);
+    }
   };
 
   const isReady = name && phone && selectedDate && selectedTime;
@@ -570,9 +602,26 @@ export default function BookAppointment() {
         </nav>
       </div>
 
+      {/* Booking error banner */}
+      {bookingError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-lg">
+          {bookingError}
+        </div>
+      )}
+
       {/* OTP Overlay */}
       {step==="otp" && (
-        <OtpOverlay phone={phone} onVerified={()=>setStep("confirmed")} onBack={()=>setStep("form")}/>
+        <OtpOverlay phone={phone} onVerified={handleOtpVerified} onBack={()=>setStep("form")}/>
+      )}
+
+      {/* Loading overlay while booking */}
+      {bookingLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
+            <svg className="w-8 h-8 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+            <p className="text-sm font-semibold text-gray-700">Confirming your booking…</p>
+          </div>
+        </div>
       )}
 
       {/* Confirmed Modal */}

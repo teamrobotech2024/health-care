@@ -1,41 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { adminApi, type AdminAppointment, authApi } from "../../lib/api";
+import { clearSession, getUser, getAvatarLetter } from "../../lib/auth";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface Appointment {
-  id: string;
-  patient: string;
-  date: string;
-  time: string;
-  doctor: string;
-  department: string;
-  status: "Confirmed" | "Pending" | "Cancelled";
-}
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-const appointments: Appointment[] = [
-  { id: "REQ-001", patient: "Arnav Shah", date: "25 Feb 2025", time: "10:00 AM", doctor: "Dr. Mehta", department: "Cardiology", status: "Confirmed" },
-  { id: "REQ-002", patient: "Priya Patel", date: "25 Feb 2025", time: "11:30 AM", doctor: "Dr. Sharma", department: "General", status: "Pending" },
-  { id: "REQ-003", patient: "Rahul Verma", date: "26 Feb 2025", time: "09:00 AM", doctor: "Dr. Nair", department: "Orthopedics", status: "Confirmed" },
-  { id: "REQ-004", patient: "Sneha Joshi", date: "26 Feb 2025", time: "02:00 PM", doctor: "Dr. Mehta", department: "Cardiology", status: "Pending" },
-  { id: "REQ-005", patient: "Amit Kumar", date: "27 Feb 2025", time: "03:30 PM", doctor: "Dr. Gupta", department: "Dermatology", status: "Cancelled" },
-  { id: "REQ-006", patient: "Kavya Reddy", date: "27 Feb 2025", time: "10:30 AM", doctor: "Dr. Sharma", department: "General", status: "Confirmed" },
-  { id: "REQ-007", patient: "Rohan Das", date: "28 Feb 2025", time: "01:00 PM", doctor: "Dr. Nair", department: "Orthopedics", status: "Pending" },
-];
 
-const weeklyData = [
-  { day: "Mon", count: 8 },
-  { day: "Tue", count: 12 },
-  { day: "Wed", count: 7 },
-  { day: "Thu", count: 15 },
-  { day: "Fri", count: 10 },
-  { day: "Sat", count: 5 },
-  { day: "Sun", count: 3 },
-];
-
-const maxCount = Math.max(...weeklyData.map((d) => d.count));
 
 // ─── Sidebar Nav Items ────────────────────────────────────────────────────────
 const navItems = [
@@ -113,12 +84,51 @@ function StatCard({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ────────────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
 
+  // State from API
+  const [appointments, setAppointments] = useState<AdminAppointment[]>([]);
+  const [weeklyData, setWeeklyData] = useState<{ day: string; count: number }[]>([
+    { day: "Mon", count: 0 }, { day: "Tue", count: 0 }, { day: "Wed", count: 0 },
+    { day: "Thu", count: 0 }, { day: "Fri", count: 0 }, { day: "Sat", count: 0 }, { day: "Sun", count: 0 },
+  ]);
+  const [loading, setLoading] = useState(true);
+  const [adminName, setAdminName] = useState("Admin");
+  const [adminEmail, setAdminEmail] = useState("admin@healthconnect.in");
+  const [adminAvatar, setAdminAvatar] = useState("Ad");
+
+  useEffect(() => {
+    const user = getUser();
+    if (user) {
+      setAdminName(user.name || "Admin");
+      setAdminEmail(user.email);
+      setAdminAvatar(getAvatarLetter());
+    }
+
+    // Fetch appointments and stats in parallel
+    Promise.all([
+      adminApi.getAppointments(),
+      adminApi.getStats(),
+    ])
+      .then(([apptsData, statsData]) => {
+        setAppointments(apptsData.appointments);
+        setWeeklyData(statsData.weeklyData);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleLogout = async () => {
+    try { await authApi.logout(); } catch {}
+    clearSession();
+    router.push("/");
+  };
+
+  const maxCount = Math.max(...weeklyData.map((d) => d.count), 1);
   const confirmed = appointments.filter((a) => a.status === "Confirmed").length;
   const pending = appointments.filter((a) => a.status === "Pending").length;
 
@@ -173,15 +183,15 @@ export default function AdminDashboard() {
         <div className="px-4 py-4 border-t border-white/10">
           <div className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition cursor-pointer">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              Ad
+              {adminAvatar}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">Admin User</p>
-              <p className="text-xs text-gray-500 truncate">admin@healthconnect.in</p>
+              <p className="text-sm font-semibold text-white truncate">{adminName}</p>
+              <p className="text-xs text-gray-500 truncate">{adminEmail}</p>
             </div>
           </div>
           <button
-            onClick={() => router.push("/")}
+            onClick={handleLogout}
             className="mt-2 w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
