@@ -4,9 +4,9 @@ import Image from "next/image";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { appointmentsApi, type Appointment, ApiError } from "../../lib/api";
-import { clearSession, getUser, getAvatarLetter, authApi } from "../../lib/auth";
-import { authApi as authApiCall } from "../../lib/api";
+import { appointmentsApi, type Appointment, authApi as authApiCall } from "../../lib/api";
+import { clearSession, getUser, getAvatarLetter } from "../../lib/auth";
+
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 function HomeIcon({ active }: { active?: boolean }) {
@@ -179,7 +179,7 @@ function AppCard({
           {appt.status}
         </span>
       </div>
-      <h3 className="text-base font-bold text-gray-900 mb-3">{appt.title}</h3>
+      <h3 className="text-base font-bold text-gray-900 mb-3">Appointment — {appt.patient_name}</h3>
 
       {/* Date & Time */}
       <div className="flex flex-col gap-1.5 mb-3">
@@ -197,9 +197,9 @@ function AppCard({
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
           </svg>
-          {appt.doctor} · <span className="text-gray-400">{appt.department}</span>
+          {appt.phone} · <span className="text-gray-400">{appt.short_id}</span>
         </div>
       </div>
 

@@ -53,11 +53,12 @@ const navItems = [
 ];
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: Appointment["status"] }) {
-  const styles = {
+function StatusBadge({ status }: { status: AdminAppointment["status"] }) {
+  const styles: Record<AdminAppointment["status"], string> = {
     Confirmed: "bg-emerald-50 text-emerald-600 border-emerald-100",
     Pending: "bg-amber-50 text-amber-600 border-amber-100",
     Cancelled: "bg-red-50 text-red-500 border-red-100",
+    Rescheduled: "bg-blue-50 text-blue-600 border-blue-100",
   };
   return (
     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${styles[status]}`}>
@@ -377,16 +378,16 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                            {appt.patient.split(" ").map((n) => n[0]).join("")}
+                            {(appt.patient_name || "?").split(" ").map((n) => n[0]).join("")}
                           </div>
-                          <span className="text-sm font-medium text-gray-900">{appt.patient}</span>
+                          <span className="text-sm font-medium text-gray-900">{appt.patient_name}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 hidden md:table-cell text-sm text-gray-600">{appt.date}</td>
                       <td className="px-6 py-4 hidden md:table-cell text-sm text-gray-600">{appt.time}</td>
-                      <td className="px-6 py-4 hidden lg:table-cell text-sm text-gray-600">{appt.doctor}</td>
+                      <td className="px-6 py-4 hidden lg:table-cell text-sm text-gray-600">{appt.phone}</td>
                       <td className="px-6 py-4 hidden lg:table-cell">
-                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">{appt.department}</span>
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">{appt.note ? appt.status : "—"}</span>
                       </td>
                       <td className="px-6 py-4">
                         <StatusBadge status={appt.status} />
