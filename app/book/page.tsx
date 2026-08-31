@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { appointmentsApi } from "../../lib/api";
-import { getUser, getAvatarLetter } from "../../lib/auth";
+import { getUser } from "../../lib/auth";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 function HomeIcon({ active }: { active?: boolean }) {
@@ -214,7 +214,7 @@ function ConfirmModal({ name, phone, date, time, onClose }:
             </svg>
           </div>
           <h2 className="text-xl font-bold text-white">Appointment Confirmed!</h2>
-          <p className="text-emerald-100 text-sm mt-1">OTP verified. You're all set.</p>
+          <p className="text-emerald-100 text-sm mt-1">OTP verified. You&apos;re all set.</p>
         </div>
         <div className="-mt-8 mx-4 bg-white rounded-2xl shadow-lg border border-gray-100 p-5 space-y-3.5">
           {[
@@ -295,7 +295,7 @@ function DesktopCalendar({ selected, onSelect }:
 export default function BookAppointment() {
   const router = useRouter();
   const [activeNav, setActiveNav] = useState("book");
-  const [name, setName]           = useState("");
+  const [name, setName]           = useState(() => getUser()?.name || "");
   const [phone, setPhone]         = useState("");
   const [selectedDate, setSelectedDate] = useState<Date|null>(null);
   const [selectedTime, setSelectedTime] = useState<string|null>(null);
@@ -304,12 +304,6 @@ export default function BookAppointment() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState("");
   const strip = useMemo(()=>buildStrip(),[]);
-
-  // Pre-fill name from logged-in user
-  useEffect(() => {
-    const user = getUser();
-    if (user?.name) setName(user.name);
-  }, []);
 
   const handleContinue = () => {
     const e: Record<string,string> = {};

@@ -4,8 +4,7 @@ import Image from "next/image";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { appointmentsApi, type Appointment, authApi as authApiCall } from "../../lib/api";
-import { clearSession, getUser, getAvatarLetter } from "../../lib/auth";
+import { appointmentsApi, type Appointment } from "../../lib/api";
 
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -72,8 +71,8 @@ const CANCEL_REASONS = [
   "Others",
 ];
 
-function CancelModal({ id, onConfirm, onClose }:
-  { id: string; onConfirm: (reason: string) => void; onClose: () => void }) {
+function CancelModal({ onConfirm, onClose }:
+  { id?: string; onConfirm: (reason: string) => void; onClose: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
@@ -154,7 +153,7 @@ function RescheduleModal({ id, onConfirm, onClose }:
           </svg>
         </div>
         <h2 className="text-lg font-bold text-gray-900 mb-1">Reschedule {id}?</h2>
-        <p className="text-sm text-gray-500 mb-6">You'll be redirected to pick a new date and time slot for this appointment.</p>
+        <p className="text-sm text-gray-500 mb-6">You&apos;ll be redirected to pick a new date and time slot for this appointment.</p>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">Go back</button>
           <button onClick={onConfirm} className="flex-1 py-3 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold transition">Reschedule</button>
@@ -258,30 +257,14 @@ export default function UpcomingPage() {
   const [cancelId, setCancelId]     = useState<string|null>(null);
   const [rescheduleId, setRescheduleId] = useState<string|null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState("Patient");
-  const [avatarLetter, setAvatarLetter] = useState("P");
 
   // Fetch appointments from backend
   useEffect(() => {
-    const user = getUser();
-    if (user) {
-      setUserName(user.name || user.email);
-      setAvatarLetter(getAvatarLetter());
-    }
-
     appointmentsApi
       .list()
       .then(({ appointments }) => setAppointments(appointments))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, []);
-
-  const handleLogout = async () => {
-    try { await authApiCall.logout(); } catch {}
-    clearSession();
-    router.push("/");
-  };
 
   const tabFilter: Record<string, AppStatus[]> = {
     Bookings:    ["Confirmed","Pending"],

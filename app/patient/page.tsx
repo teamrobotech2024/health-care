@@ -74,19 +74,16 @@ export default function PatientHome() {
   const [activeNav, setActiveNav] = useState("home");
   const router = useRouter();
 
-  const [userName, setUserName] = useState("Patient");
-  const [avatarLetter, setAvatarLetter] = useState("P");
+  const [userName] = useState(() => {
+    const stored = getUser();
+    return stored?.name || stored?.email || "Patient";
+  });
+  const [avatarLetter] = useState(() => getAvatarLetter() || "P");
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
 
-  // ─── Load user + appointments ───────────────────────────────────────────────
+  // ─── Load appointments ───────────────────────────────────────────────
   useEffect(() => {
-    const stored = getUser();
-    if (stored) {
-      setUserName(stored.name || stored.email);
-      setAvatarLetter(getAvatarLetter());
-    }
-
     // Fetch upcoming confirmed/pending appointments
     appointmentsApi
       .list()

@@ -68,7 +68,10 @@ export default function Home() {
 
     try {
       await authApi.signup(signupName, signupEmail, signupPassword, signupRole);
-      setView("verify-email");
+      setLoginEmail(signupEmail);
+      setLoginPassword(signupPassword);
+      setSignupSuccess(true);
+      setView("login");
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -129,6 +132,12 @@ export default function Home() {
             <>
               <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">Health Connect</h1>
               <p className="text-sm text-center text-gray-500 mb-8">Book appointments for your next visit.</p>
+
+              {signupSuccess && (
+                <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700 font-medium">
+                  Account created successfully! You can now sign in with your credentials.
+                </div>
+              )}
 
               {error && (
                 <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
