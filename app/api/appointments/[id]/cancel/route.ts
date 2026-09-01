@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/server-auth";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
 
 export async function PATCH(
   req: NextRequest,
@@ -11,27 +11,37 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { reason } = body;
 
-    if (!reason) {
-      return NextResponse.json(
-        { error: "Bad Request", message: "reason is required." },
-        { status: 400 }
-      );
-    }
+    const cancelReason = reason || "Patient requested cancellation.";
+    const client = supabaseAdmin || supabase;
 
-    const { data: existing, error: fetchError } = await supabase
+    // Support lookup by UUID `id` or string `short_id`
+    const { data: existingList, error: fetchError } = await client
       .from("appointments")
-      .select("id, status")
-      .eq("id", id)
-      .eq("user_id", authRes.user.id)
-      .single();
+      .select("*")
+      .or(`id.eq.${id},short_id.eq.${id}`);
 
-    if (fetchError || !existing) {
+    if (fetchError || !existingList || existingList.length === 0) {
+      console.error("Cancel appointment lookup error:", fetchError, "ID:", id);
       return NextResponse.json(
         { error: "NotFound", message: "Appointment not found." },
         { status: 404 }
+      );
+    }
+
+    const existing = existingList[0];
+
+    // Authorization check
+    if (
+      authRes.profile.role !== "admin" &&
+      authRes.profile.role !== "doctor" &&
+      existing.user_id !== authRes.user.id
+    ) {
+      return NextResponse.json(
+        { error: "Forbidden", message: "You are not authorized to cancel this appointment." },
+        { status: 403 }
       );
     }
 
@@ -42,18 +52,18 @@ export async function PATCH(
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("appointments")
       .update({
         status: "Cancelled",
-        note: `Cancelled: ${reason}. Book a new one if needed.`,
+        note: `Cancelled: ${cancelReason}. Book a new one if needed.`,
       })
-      .eq("id", id)
-      .eq("user_id", authRes.user.id)
+      .eq("id", existing.id)
       .select()
       .single();
 
     if (error) {
+      console.error("Cancel update error:", error);
       return NextResponse.json(
         { error: "DatabaseError", message: error.message },
         { status: 500 }
@@ -66,7 +76,7 @@ export async function PATCH(
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "An unexpected error occurred.";
-    console.error("Cancel error:", err);
+    console.error("Cancel exception:", err);
     return NextResponse.json(
       { error: "InternalServerError", message },
       { status: 500 }

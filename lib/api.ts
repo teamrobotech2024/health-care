@@ -58,16 +58,18 @@ export class ApiError extends Error {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
 export const authApi = {
-  signup: (name: string, email: string, password: string, role: "patient" | "admin" = "patient") =>
-    request("/auth/signup", { method: "POST", body: { name, email, password, role } }),
+  signup: (name: string, email: string, password: string) =>
+    request("/auth/signup", { method: "POST", body: { name, email, password } }),
 
   login: (email: string, password: string) =>
     request<{
       accessToken: string;
       refreshToken: string;
       expiresAt: number;
-      user: { id: string; email: string; name: string; role: "patient" | "admin" };
+      user: { id: string; email: string; name: string; role: "patient" | "doctor" | "admin" };
     }>("/auth/login", { method: "POST", body: { email, password } }),
 
   logout: () =>
@@ -91,6 +93,9 @@ export type Appointment = {
   id: string;
   short_id: string;
   user_id: string;
+  doctor_id?: string;
+  doctor_name?: string;
+  hospital_name?: string;
   patient_name: string;
   phone: string;
   date: string;
@@ -109,6 +114,9 @@ export const appointmentsApi = {
     phone: string;
     date: string;
     time: string;
+    doctor_id?: string;
+    doctor_name?: string;
+    hospital_name?: string;
   }) =>
     request<{ message: string; appointment: Appointment }>("/appointments", {
       method: "POST",
@@ -128,10 +136,27 @@ export const appointmentsApi = {
     ),
 };
 
-// ─── Admin ────────────────────────────────────────────────────────────────────
+// ─── Public Doctors ───────────────────────────────────────────────────────────
+
+export const doctorsApi = {
+  list: () =>
+    request<{ doctors: Doctor[] }>("/doctors"),
+};
+
+// ─── Admin & Doctors ──────────────────────────────────────────────────────────
 
 export type AdminAppointment = Appointment & {
   profiles?: { name: string; role: string };
+};
+
+export type Doctor = {
+  id: string;
+  user_id: string;
+  name: string;
+  profession: string;
+  hospital_name: string;
+  address: string;
+  created_at: string;
 };
 
 export const adminApi = {
@@ -166,4 +191,72 @@ export const adminApi = {
       };
       weeklyData: { day: string; count: number }[];
     }>("/admin/stats"),
+
+  getDoctors: () =>
+    request<{ doctors: Doctor[] }>("/admin/doctors"),
+
+  createDoctor: (data: {
+    name: string;
+    email: string;
+    password: string;
+    profession: string;
+    hospital_name: string;
+    address: string;
+  }) =>
+    request<{ message: string; doctor: Doctor }>("/admin/doctors", {
+      method: "POST",
+      body: data,
+    }),
 };
+
+// ─── OTP Email / SMS ──────────────────────────────────────────────────────────
+
+export const otpApi = {
+  send: (email?: string, phone?: string) =>
+    request<{ message: string; email?: string; success: boolean; provider: string }>("/otp/send", {
+      method: "POST",
+      body: { email, phone },
+    }),
+
+  verify: (otp: string, email?: string, phone?: string) =>
+    request<{ message: string; verified: boolean }>("/otp/verify", {
+      method: "POST",
+      body: { otp, email, phone },
+    }),
+};
+
+// ─── Doctor Portal ───────────────────────────────────────────────────────────
+
+export type DoctorNotification = {
+  id: string;
+  doctor_id: string;
+  appointment_id?: string;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+};
+
+export const doctorPortalApi = {
+  getAppointments: () =>
+    request<{ appointments: Appointment[]; doctor: Doctor }>("/doctor/appointments"),
+
+  updateStatus: (
+    id: string,
+    data: { status?: "Confirmed" | "Pending" | "Cancelled" | "Rescheduled"; note?: string; date?: string; time?: string }
+  ) =>
+    request<{ message: string; appointment: Appointment }>(
+      `/doctor/appointments/${id}/status`,
+      { method: "PATCH", body: data }
+    ),
+
+  getNotifications: () =>
+    request<{ notifications: DoctorNotification[] }>("/doctor/notifications"),
+
+  markNotificationRead: (id?: string, readAll?: boolean) =>
+    request<{ message: string }>("/doctor/notifications", {
+      method: "PATCH",
+      body: { id, readAll },
+    }),
+};
+

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "./supabase";
+import { supabase, supabaseAdmin } from "./supabase";
+
+export type AuthRole = "patient" | "doctor" | "admin";
 
 export type AuthContext = {
   user: {
@@ -8,7 +10,7 @@ export type AuthContext = {
   };
   profile: {
     name: string;
-    role: "patient" | "admin";
+    role: AuthRole;
   };
   token: string;
 };
@@ -41,20 +43,24 @@ export async function authenticateRequest(
     );
   }
 
-  const { data: profile } = await supabase
+  const dbClient = supabaseAdmin || supabase;
+  const { data: profile } = await dbClient
     .from("profiles")
     .select("name, role")
     .eq("id", data.user.id)
     .single();
+
+  const role = (profile?.role || data.user.user_metadata?.role || "patient") as AuthRole;
+  const name = profile?.name || data.user.user_metadata?.name || data.user.email || "";
 
   return {
     user: {
       id: data.user.id,
       email: data.user.email,
     },
-    profile: (profile as { name: string; role: "patient" | "admin" }) || {
-      name: data.user.email || "",
-      role: "patient",
+    profile: {
+      name,
+      role,
     },
     token,
   };

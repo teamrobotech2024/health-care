@@ -11,7 +11,7 @@ export type StoredUser = {
   id: string;
   email: string;
   name: string;
-  role: "patient" | "admin";
+  role: "patient" | "doctor" | "admin";
 };
 
 /** Store session data after login */
@@ -64,13 +64,18 @@ export function isLoggedIn(): boolean {
 }
 
 /** Get user role */
-export function getRole(): "patient" | "admin" | null {
+export function getRole(): "patient" | "doctor" | "admin" | null {
   return getUser()?.role ?? null;
 }
 
 /** Check if current user is an admin */
 export function isAdmin(): boolean {
   return getRole() === "admin";
+}
+
+/** Check if current user is a doctor */
+export function isDoctor(): boolean {
+  return getRole() === "doctor";
 }
 
 /** Get first letter of the user's name (for avatar) */

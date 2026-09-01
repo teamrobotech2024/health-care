@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, appointmentsApi, type Appointment } from "../../lib/api";
+import { authApi, appointmentsApi, doctorsApi, type Appointment, type Doctor } from "../../lib/api";
 import { getUser, clearSession, getAvatarLetter } from "../../lib/auth";
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
@@ -81,8 +81,10 @@ export default function PatientHome() {
   const [avatarLetter] = useState(() => getAvatarLetter() || "P");
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
 
-  // ─── Load appointments ───────────────────────────────────────────────
+  // ─── Load appointments & doctors ───────────────────────────────────────
   useEffect(() => {
     // Fetch upcoming confirmed/pending appointments
     appointmentsApi
@@ -95,6 +97,15 @@ export default function PatientHome() {
       })
       .catch(() => {})
       .finally(() => setLoadingAppts(false));
+
+    // Fetch registered doctors
+    doctorsApi
+      .list()
+      .then(({ doctors }) => {
+        setDoctors(doctors || []);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingDoctors(false));
   }, []);
 
   const handleLogout = async () => {
@@ -196,23 +207,57 @@ export default function PatientHome() {
             </div>
           </div>
 
-          {/* Hero */}
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 leading-tight">
-            How can we<br />help you today?
-          </h1>
+          {/* Available Doctors & Specialists */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Available Doctors</h2>
+                <p className="text-xs text-gray-400">Select a doctor to schedule your appointment</p>
+              </div>
+              <button onClick={() => router.push("/book")} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700">
+                View all doctors &rarr;
+              </button>
+            </div>
 
-          {/* Book Appointment CTA */}
-          <button onClick={() => router.push("/book")} className="w-full bg-gray-900 hover:bg-gray-800 active:scale-[0.99] text-white rounded-2xl p-5 flex items-center gap-4 mb-6 transition-all shadow-lg">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-base">Book Appointment &rarr;</p>
-              <p className="text-sm text-gray-400 mt-0.5">Schedule your next visit</p>
-            </div>
-          </button>
+            {loadingDoctors ? (
+              <div className="flex items-center justify-center py-6">
+                <svg className="w-5 h-5 animate-spin text-indigo-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+              </div>
+            ) : doctors.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 text-center">
+                <p className="text-sm font-medium text-gray-500">No doctors registered yet</p>
+                <p className="text-xs text-gray-400 mt-1">Please check back soon.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {doctors.map((doctor) => (
+                  <div key={doctor.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                          {doctor.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                          {doctor.profession}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-bold text-gray-900">{doctor.name}</h3>
+                      <p className="text-xs font-semibold text-indigo-600 mt-0.5">{doctor.hospital_name}</p>
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-1">{doctor.address}</p>
+                    </div>
+
+                    <button
+                      onClick={() => router.push(`/book?doctorId=${doctor.id}`)}
+                      className="mt-4 w-full py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center justify-center gap-1.5"
+                    >
+                      Book Appointment
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Upcoming section */}
           <div className="flex items-center justify-between mb-3">

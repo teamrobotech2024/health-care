@@ -20,7 +20,6 @@ export default function Home() {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
-  const [signupRole, setSignupRole] = useState<"patient" | "admin">("patient");
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -37,9 +36,11 @@ export default function Home() {
       const data = await authApi.login(loginEmail, loginPassword);
       saveSession(data.accessToken, data.refreshToken, data.user);
 
-      // Redirect based on role
+      // Redirect based on role in RBAC
       if (data.user.role === "admin") {
         router.push("/admin");
+      } else if (data.user.role === "doctor") {
+        router.push("/doctor");
       } else {
         router.push("/patient");
       }
@@ -67,7 +68,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      await authApi.signup(signupName, signupEmail, signupPassword, signupRole);
+      await authApi.signup(signupName, signupEmail, signupPassword);
       setLoginEmail(signupEmail);
       setLoginPassword(signupPassword);
       setSignupSuccess(true);
@@ -235,38 +236,6 @@ export default function Home() {
             <>
               <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">Create an account</h1>
               <p className="text-sm text-center text-gray-500 mb-6">You&apos;ll receive an email to verify your account.</p>
-
-              {/* Role selector */}
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setSignupRole("patient")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                    signupRole === "patient"
-                      ? "bg-gray-900 text-white border-gray-900 shadow-sm"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50"
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  Patient
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSignupRole("admin")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                    signupRole === "admin"
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50"
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  Admin
-                </button>
-              </div>
 
               {error && (
                 <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">

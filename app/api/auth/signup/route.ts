@@ -4,7 +4,7 @@ import { supabase, supabaseAdmin } from "@/lib/supabase";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, password, role } = body;
+    const { name, email, password } = body;
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validRoles = ["patient", "admin"];
-    const assignedRole = validRoles.includes(role) ? role : "patient";
+    // Public registrations are ALWAYS assigned the 'patient' role in RBAC
+    const assignedRole = "patient";
 
     const origin = req.headers.get("origin") || req.nextUrl.origin;
     let userId: string | undefined;

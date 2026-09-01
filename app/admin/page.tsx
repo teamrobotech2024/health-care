@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { adminApi, type AdminAppointment, authApi } from "../../lib/api";
+import { adminApi, type AdminAppointment, type Doctor, ApiError, authApi } from "../../lib/api";
 import { clearSession, getUser, getAvatarLetter } from "../../lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AppStatus = AdminAppointment["status"];
-type NavKey = "dashboard" | "appointments" | "patients" | "settings";
+type NavKey = "dashboard" | "appointments" | "doctors" | "patients" | "settings";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const DashIcon = () => (
@@ -18,6 +18,11 @@ const DashIcon = () => (
 const CalIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+const DoctorIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
   </svg>
 );
 const PeopleIcon = () => (
@@ -34,6 +39,7 @@ const SettingsIcon = () => (
 const navItems: { key: NavKey; label: string; Icon: React.FC }[] = [
   { key: "dashboard",    label: "Dashboard",    Icon: DashIcon },
   { key: "appointments", label: "Appointments", Icon: CalIcon },
+  { key: "doctors",      label: "Doctors",      Icon: DoctorIcon },
   { key: "patients",     label: "Patients",     Icon: PeopleIcon },
   { key: "settings",     label: "Settings",     Icon: SettingsIcon },
 ];
@@ -367,6 +373,255 @@ function AppointmentsPage({ appointments, loading, onStatusUpdate }: {
   );
 }
 
+// ─── Add Doctor Modal ─────────────────────────────────────────────────────────
+function AddDoctorModal({ onClose, onDoctorCreated }: {
+  onClose: () => void;
+  onDoctorCreated: (doctor: Doctor) => void;
+}) {
+  const [name, setName]                 = useState("");
+  const [email, setEmail]               = useState("");
+  const [password, setPassword]         = useState("");
+  const [profession, setProfession]     = useState("");
+  const [hospitalName, setHospitalName] = useState("");
+  const [address, setAddress]           = useState("");
+  
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await adminApi.createDoctor({
+        name,
+        email,
+        password,
+        profession,
+        hospital_name: hospitalName,
+        address,
+      });
+      onDoctorCreated(res.doctor);
+      onClose();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Failed to register doctor. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Add New Doctor</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Register a doctor account into the system</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Doctor Name *</label>
+            <input type="text" placeholder="Dr. John Doe" value={name} onChange={(e) => setName(e.target.value)} required
+              className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Email *</label>
+              <input type="email" placeholder="doctor@hospital.com" value={email} onChange={(e) => setEmail(e.target.value)} required
+                className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Password *</label>
+              <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
+                className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Profession / Specialty *</label>
+            <input type="text" placeholder="e.g. Cardiologist, Neurologist, General Physician" value={profession} onChange={(e) => setProfession(e.target.value)} required
+              className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Hospital Name *</label>
+            <input type="text" placeholder="e.g. City General Hospital" value={hospitalName} onChange={(e) => setHospitalName(e.target.value)} required
+              className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Hospital Address *</label>
+            <textarea placeholder="e.g. 123 Healthcare Ave, Block B" value={address} onChange={(e) => setAddress(e.target.value)} required rows={2}
+              className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition">Cancel</button>
+            <button type="submit" disabled={loading}
+              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {loading ? (<><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Creating…</>) : "Register Doctor"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Doctors Page ─────────────────────────────────────────────────────────────
+function DoctorsPage() {
+  const [doctors, setDoctors]         = useState<Doctor[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    adminApi.getDoctors()
+      .then((data) => setDoctors(data.doctors))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = useMemo(() => {
+    return doctors.filter((d) =>
+      !search ||
+      d.name.toLowerCase().includes(search.toLowerCase()) ||
+      d.profession.toLowerCase().includes(search.toLowerCase()) ||
+      d.hospital_name.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [doctors, search]);
+
+  const uniqueHospitals = useMemo(() => {
+    return new Set(doctors.map((d) => d.hospital_name.toLowerCase().trim())).size;
+  }, [doctors]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Doctors & Hospitals</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{doctors.length} registered doctors across {uniqueHospitals} hospitals</p>
+        </div>
+        <button onClick={() => setShowAddModal(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+          Add Doctor
+        </button>
+      </div>
+
+      {/* Stats bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{doctors.length}</p>
+            <p className="text-xs text-gray-400">Total Registered Doctors</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0h4m-4 0H7" /></svg>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{uniqueHospitals}</p>
+            <p className="text-xs text-gray-400">Affiliated Hospitals</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <input type="text" placeholder="Search doctor, specialty, hospital…" value={search} onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <svg className="w-7 h-7 animate-spin text-indigo-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <svg className="w-10 h-10 mb-3 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            <p className="text-sm font-medium">{search ? "No doctors match your search" : "No doctors registered yet"}</p>
+            {!search && (
+              <button onClick={() => setShowAddModal(true)} className="mt-3 text-xs text-indigo-600 font-semibold hover:underline">
+                + Register First Doctor
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {["Doctor Name", "Profession / Specialty", "Hospital Name", "Address", "Role"].map((h) => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((d) => (
+                  <tr key={d.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                          {d.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{d.name}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-700 font-medium">{d.profession}</td>
+                    <td className="px-5 py-4 text-sm text-indigo-600 font-semibold">{d.hospital_name}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500 max-w-xs truncate">{d.address}</td>
+                    <td className="px-5 py-4">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                        Doctor
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showAddModal && (
+        <AddDoctorModal
+          onClose={() => setShowAddModal(false)}
+          onDoctorCreated={(newDoc) => setDoctors((prev) => [newDoc, ...prev])}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Patients Page ────────────────────────────────────────────────────────────
 function PatientsPage({ appointments, loading }: {
   appointments: AdminAppointment[];
@@ -518,7 +773,11 @@ export default function AdminDashboard() {
   };
 
   const pageTitles: Record<NavKey, string> = {
-    dashboard: "Dashboard", appointments: "Appointments", patients: "Patients", settings: "Settings",
+    dashboard: "Dashboard",
+    appointments: "Appointments",
+    doctors: "Doctors & Hospitals",
+    patients: "Patients",
+    settings: "Settings",
   };
 
   return (
@@ -582,6 +841,7 @@ export default function AdminDashboard() {
         <main className="flex-1 overflow-y-auto p-5 md:p-6">
           {activeNav === "dashboard"    && <DashboardPage appointments={appointments} weeklyData={weeklyData} loading={loading} />}
           {activeNav === "appointments" && <AppointmentsPage appointments={appointments} loading={loading} onStatusUpdate={handleStatusUpdate} />}
+          {activeNav === "doctors"      && <DoctorsPage />}
           {activeNav === "patients"     && <PatientsPage appointments={appointments} loading={loading} />}
           {activeNav === "settings"     && <SettingsPage adminName={adminName} adminEmail={adminEmail} adminAvatar={adminAvatar} onLogout={handleLogout} />}
         </main>

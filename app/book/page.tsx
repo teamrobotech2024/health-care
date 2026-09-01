@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { appointmentsApi } from "../../lib/api";
+import { appointmentsApi, otpApi, doctorsApi, type Doctor } from "../../lib/api";
 import { getUser } from "../../lib/auth";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -65,8 +65,8 @@ function buildStrip() {
 }
 
 // ─── OTP Overlay ─────────────────────────────────────────────────────────────
-function OtpOverlay({ phone, onVerified, onBack }:
-  { phone: string; onVerified: () => void; onBack: () => void }) {
+function OtpOverlay({ email, onVerified, onBack }:
+  { email: string; phone?: string; onVerified: () => void; onBack: () => void }) {
   const [digits, setDigits] = useState(["","","","","",""]);
   const [error, setError]   = useState("");
   const [timer, setTimer]   = useState(30);
@@ -79,8 +79,6 @@ function OtpOverlay({ phone, onVerified, onBack }:
     const id = setTimeout(() => setTimer(t => t-1), 1000);
     return () => clearTimeout(id);
   }, [timer]);
-
-  const maskedPhone = "+91 " + phone.replace(/\d(?=\d{4})/g, "•");
 
   const handleDigit = (idx: number, val: string) => {
     if (!/^\d?$/.test(val)) return;
@@ -105,15 +103,37 @@ function OtpOverlay({ phone, onVerified, onBack }:
     e.preventDefault();
   };
 
-  const verify = () => {
+  const [verifying, setVerifying] = useState(false);
+
+  const verify = async () => {
     const otp = digits.join("");
     if (otp.length < 6) { setError("Enter all 6 digits"); return; }
-    // Demo: accept 123456 or any 6-digit code
-    if (otp === "000000") { setError("Invalid OTP. Try again."); setShaking(true); setTimeout(()=>setShaking(false),500); return; }
-    onVerified();
+    setVerifying(true);
+    setError("");
+    try {
+      await otpApi.verify(otp, email);
+      onVerified();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Invalid or expired OTP code.";
+      setError(msg);
+      setShaking(true);
+      setTimeout(() => setShaking(false), 500);
+    } finally {
+      setVerifying(false);
+    }
   };
 
-  const resend = () => { setTimer(30); setDigits(["","","","","",""]); setError(""); refs.current[0]?.focus(); };
+  const resend = async () => {
+    setTimer(30);
+    setDigits(["","","","","",""]);
+    setError("");
+    try {
+      await otpApi.send(email);
+    } catch (err: unknown) {
+      console.error("Resend OTP error:", err);
+    }
+    refs.current[0]?.focus();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -123,13 +143,13 @@ function OtpOverlay({ phone, onVerified, onBack }:
         <div className="px-6 pt-6 pb-2">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
             <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Verify Your Number</h2>
+          <h2 className="text-xl font-bold text-gray-900">Verify Registered Email</h2>
           <p className="text-sm text-gray-500 mt-1">
-            We sent a 6-digit OTP to{" "}
-            <span className="font-semibold text-gray-900">{maskedPhone}</span>
+            We sent a 6-digit OTP code to{" "}
+            <span className="font-semibold text-gray-900">{email}</span>
           </p>
         </div>
 
@@ -168,18 +188,19 @@ function OtpOverlay({ phone, onVerified, onBack }:
             }
           </p>
 
-          {/* Demo hint */}
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-5">
-            <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p className="text-xs text-amber-700">Demo: Enter any 6 digits (e.g. <b>123456</b>) to verify</p>
+          {/* Info banner */}
+          <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 mb-5">
+            <svg className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p className="text-xs text-indigo-800">OTP code dispatched to your registered email inbox.</p>
           </div>
 
           {/* Verify button */}
           <button
             onClick={verify}
-            className="w-full py-4 bg-gray-900 hover:bg-gray-800 active:scale-[0.99] text-white text-sm font-bold rounded-2xl transition-all mb-3"
+            disabled={verifying}
+            className="w-full py-4 bg-gray-900 hover:bg-gray-800 active:scale-[0.99] disabled:opacity-60 text-white text-sm font-bold rounded-2xl transition-all mb-3 flex items-center justify-center gap-2"
           >
-            Verify & Confirm Booking
+            {verifying ? "Verifying OTP..." : "Verify & Confirm Booking"}
           </button>
 
           {/* Back */}
@@ -301,19 +322,57 @@ export default function BookAppointment() {
   const [selectedTime, setSelectedTime] = useState<string|null>(null);
   const [errors, setErrors]       = useState<Record<string,string>>({});
   const [step, setStep]           = useState<"form"|"otp"|"confirmed">("form");
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingError, setBookingError] = useState("");
+  const [bookingLoading, setBookingLoading]         = useState(false);
+  const [bookingError, setBookingError]             = useState("");
   const strip = useMemo(()=>buildStrip(),[]);
 
-  const handleContinue = () => {
+  const [doctors, setDoctors]                       = useState<Doctor[]>([]);
+  const [selectedDoctor, setSelectedDoctor]         = useState<Doctor | null>(null);
+  const [loadingDoctors, setLoadingDoctors]         = useState(true);
+
+  useEffect(() => {
+    doctorsApi.list()
+      .then(({ doctors }) => {
+        const list = doctors || [];
+        setDoctors(list);
+
+        const params = new URLSearchParams(window.location.search);
+        const docId = params.get("doctorId");
+        if (docId) {
+          const match = list.find((d) => d.id === docId);
+          if (match) setSelectedDoctor(match);
+        } else if (list.length > 0) {
+          setSelectedDoctor(list[0]);
+        }
+      })
+      .catch((err) => console.error("Error fetching doctors:", err))
+      .finally(() => setLoadingDoctors(false));
+  }, []);
+
+  const userEmail = getUser()?.email || "";
+
+  const handleContinue = async () => {
     const e: Record<string,string> = {};
+    if (!selectedDoctor) e.doctor = "Please select a doctor";
     if (!name.trim()) e.name = "Name is required";
     if (!phone.trim()) e.phone = "Phone is required";
     else if (!/^[0-9\s\-+()]{7,15}$/.test(phone.trim())) e.phone = "Enter a valid number";
     if (!selectedDate) e.date = "Please select a date";
     if (!selectedTime) e.time = "Please select a time";
     setErrors(e);
-    if (!Object.keys(e).length) setStep("otp");
+    if (!Object.keys(e).length) {
+      setBookingLoading(true);
+      setBookingError("");
+      try {
+        await otpApi.send(userEmail, phone);
+        setStep("otp");
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to send Email OTP code.";
+        setBookingError(msg);
+      } finally {
+        setBookingLoading(false);
+      }
+    }
   };
 
   // Called after OTP is verified — POSTs appointment to backend
@@ -327,6 +386,9 @@ export default function BookAppointment() {
         phone,
         date: dateStr,
         time: selectedTime!,
+        doctor_id: selectedDoctor?.id,
+        doctor_name: selectedDoctor?.name || "",
+        hospital_name: selectedDoctor?.hospital_name || "",
       });
       setStep("confirmed");
     } catch (err: unknown) {
@@ -338,7 +400,7 @@ export default function BookAppointment() {
     }
   };
 
-  const isReady = name && phone && selectedDate && selectedTime;
+  const isReady = selectedDoctor && name && phone && selectedDate && selectedTime;
 
   return (
     <div className="min-h-screen bg-white md:bg-gray-50 flex font-sans">
@@ -414,9 +476,60 @@ export default function BookAppointment() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-6">
+              {/* Select Doctor */}
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">1. Select Doctor</h2>
+                <p className="text-xs text-gray-400 mb-4">Choose a registered doctor for your consultation</p>
+
+                {loadingDoctors ? (
+                  <div className="flex items-center justify-center py-4">
+                    <svg className="w-5 h-5 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                  </div>
+                ) : doctors.length === 0 ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center text-xs text-amber-700">
+                    No doctors available yet. Please check back later.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {doctors.map((doc) => {
+                      const selected = selectedDoctor?.id === doc.id;
+                      return (
+                        <button
+                          key={doc.id}
+                          type="button"
+                          onClick={() => { setSelectedDoctor(doc); setErrors((p) => ({ ...p, doctor: "" })); }}
+                          className={`w-full text-left p-3.5 rounded-2xl border transition-all ${
+                            selected
+                              ? "bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-sm"
+                              : "bg-white border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                                {doc.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900">{doc.name}</p>
+                                <p className="text-xs text-indigo-600 font-semibold">{doc.hospital_name}</p>
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white text-gray-700 border border-gray-200">
+                              {doc.profession}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-2 truncate pl-12">{doc.address}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {errors.doctor && <p className="text-xs text-red-500 mt-1">{errors.doctor}</p>}
+              </div>
+
               {/* Your Details */}
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Your Details</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">2. Your Details</h2>
                 <div className="mb-4">
                   <label className="block text-sm text-gray-700 mb-1.5">Name</label>
                   <input type="text" placeholder="Enter full name" value={name}
@@ -495,43 +608,83 @@ export default function BookAppointment() {
           <div className="hidden md:block p-8">
             <div className="grid grid-cols-3 gap-6">
 
-              {/* COL 1: Patient Details */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-base font-bold text-gray-900 mb-5 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                  </span>Patient Details
-                </h2>
-                <div className="mb-5">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Full Name</label>
-                  <input type="text" placeholder="e.g. Arnav Shah" value={name}
-                    onChange={e=>{setName(e.target.value);setErrors(p=>({...p,name:""}));}}
-                    className={`w-full px-4 py-3 rounded-xl border text-sm text-gray-900 placeholder-gray-400 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition ${errors.name?"border-red-300 focus:ring-red-100":"border-gray-200 focus:ring-indigo-200 focus:border-indigo-400"}`}
-                  />
-                  {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-                </div>
-                <div className="mb-6">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Phone Number</label>
-                  <div className="flex gap-2">
-                    <div className="flex items-center px-3 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600 select-none">+91</div>
-                    <input type="tel" placeholder="98765 43210" value={phone}
-                      onChange={e=>{setPhone(e.target.value);setErrors(p=>({...p,phone:""}));}}
-                      className={`flex-1 px-4 py-3 rounded-xl border text-sm text-gray-900 placeholder-gray-400 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition ${errors.phone?"border-red-300 focus:ring-red-100":"border-gray-200 focus:ring-indigo-200 focus:border-indigo-400"}`}
+              {/* COL 1: Patient & Doctor Details */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    </span>Select Doctor
+                  </h2>
+
+                  {/* Doctor Selector */}
+                  <div className="mb-5">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Doctor *</label>
+                    <select
+                      value={selectedDoctor?.id || ""}
+                      onChange={(e) => {
+                        const match = doctors.find((d) => d.id === e.target.value);
+                        if (match) { setSelectedDoctor(match); setErrors((p) => ({ ...p, doctor: "" })); }
+                      }}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      {doctors.length === 0 ? (
+                        <option value="">No doctors available</option>
+                      ) : (
+                        doctors.map((doc) => (
+                          <option key={doc.id} value={doc.id}>
+                            {doc.name} ({doc.profession} - {doc.hospital_name})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {errors.doctor && <p className="text-xs text-red-500 mt-1">{errors.doctor}</p>}
+                  </div>
+
+                  {selectedDoctor && (
+                    <div className="mb-5 p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-xl">
+                      <p className="text-xs font-bold text-gray-900">{selectedDoctor.name}</p>
+                      <p className="text-xs text-indigo-600 font-semibold">{selectedDoctor.profession} · {selectedDoctor.hospital_name}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{selectedDoctor.address}</p>
+                    </div>
+                  )}
+
+                  <h2 className="text-base font-bold text-gray-900 mb-4 pt-2 border-t border-gray-100">Patient Details</h2>
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Full Name</label>
+                    <input type="text" placeholder="e.g. Arnav Shah" value={name}
+                      onChange={e=>{setName(e.target.value);setErrors(p=>({...p,name:""}));}}
+                      className={`w-full px-4 py-3 rounded-xl border text-sm text-gray-900 placeholder-gray-400 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition ${errors.name?"border-red-300 focus:ring-red-100":"border-gray-200 focus:ring-indigo-200 focus:border-indigo-400"}`}
                     />
+                    {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
                   </div>
-                  {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Phone Number</label>
+                    <div className="flex gap-2">
+                      <div className="flex items-center px-3 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600 select-none">+91</div>
+                      <input type="tel" placeholder="98765 43210" value={phone}
+                        onChange={e=>{setPhone(e.target.value);setErrors(p=>({...p,phone:""}));}}
+                        className={`flex-1 px-4 py-3 rounded-xl border text-sm text-gray-900 placeholder-gray-400 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 transition ${errors.phone?"border-red-300 focus:ring-red-100":"border-gray-200 focus:ring-indigo-200 focus:border-indigo-400"}`}
+                      />
+                    </div>
+                    {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+                  </div>
                 </div>
-                {(selectedDate||selectedTime) && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-1.5 mb-5">
-                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide">Your Selection</p>
-                    {selectedDate && <p className="text-sm font-semibold text-gray-800">📅 {DAY_NAMES[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTH_NAMES[selectedDate.getMonth()]}</p>}
-                    {selectedTime && <p className="text-sm font-semibold text-gray-800">🕐 {selectedTime}</p>}
-                  </div>
-                )}
-                <button onClick={handleContinue}
-                  className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all ${isReady?"bg-gray-900 hover:bg-gray-800 text-white shadow-md active:scale-[0.99]":"bg-gray-100 text-gray-400 cursor-not-allowed"}`}>
-                  {isReady ? "Continue →" : "Select date & time to continue"}
-                </button>
+
+                <div>
+                  {(selectedDate||selectedTime||selectedDoctor) && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-1.5 mb-4 text-xs">
+                      <p className="font-bold text-gray-500 uppercase tracking-wide text-[10px]">Summary</p>
+                      {selectedDoctor && <p className="font-semibold text-gray-800">🩺 {selectedDoctor.name} ({selectedDoctor.hospital_name})</p>}
+                      {selectedDate && <p className="font-semibold text-gray-800">📅 {DAY_NAMES[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTH_NAMES[selectedDate.getMonth()]}</p>}
+                      {selectedTime && <p className="font-semibold text-gray-800">🕐 {selectedTime}</p>}
+                    </div>
+                  )}
+                  <button onClick={handleContinue}
+                    className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all ${isReady?"bg-gray-900 hover:bg-gray-800 text-white shadow-md active:scale-[0.99]":"bg-gray-100 text-gray-400 cursor-not-allowed"}`}>
+                    {isReady ? "Continue →" : "Select doctor, date & time"}
+                  </button>
+                </div>
               </div>
 
               {/* COL 2: Calendar */}
@@ -605,7 +758,7 @@ export default function BookAppointment() {
 
       {/* OTP Overlay */}
       {step==="otp" && (
-        <OtpOverlay phone={phone} onVerified={handleOtpVerified} onBack={()=>setStep("form")}/>
+        <OtpOverlay email={userEmail} phone={phone} onVerified={handleOtpVerified} onBack={()=>setStep("form")}/>
       )}
 
       {/* Loading overlay while booking */}
